@@ -17,29 +17,41 @@ async def clip(request: Request):
     video_id = url.split("?v=")[-1].split("&")[0]
     title = "Untitled"
 
-    # Extract title
+    # Extract video title
     try:
         with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
             info = ydl.extract_info(url, download=False)
             title = info.get('title', 'Your viral clip is ready!')
-    except:
-        pass
+    except Exception as e:
+        print("Title fetch failed:", e)
 
     raw_path = f"/tmp/{video_id}.mp4"
     final_path = f"/tmp/{video_id}_final.mp4"
 
-    # Download viral moment range (2:30–3:00 as default)
+    # Step 1: Download 2:30 to 3:00 segment (customizable)
     dl_cmd = f"yt-dlp -f 'bv[height<=720]+ba' --download-sections '*00:02:30-00:03:00' -o '{raw_path}' '{url}'"
     subprocess.run(dl_cmd, shell=True)
 
-    # Watermark + vertical format
-    ffmpeg_cmd = f"ffmpeg -y -i {raw_path} -vf "scale=1080:1920,drawtext=text='GODMODE':x=20:y=20:fontsize=48:fontcolor=white" -c:a copy {final_path}"
+    # Step 2: Convert to vertical 1080x1920 + watermark
+    ffmpeg_cmd = (
+        f"ffmpeg -y -i '{raw_path}' "
+        f"-vf \"scale=1080:1920,drawtext=text='GODMODE':x=20:y=20:fontsize=48:fontcolor=white\" "
+        f"-c:a copy '{final_path}'"
+    )
     subprocess.run(ffmpeg_cmd, shell=True)
 
-    # Send to Telegram
+    # Step 3: Send to Telegram
     with open(final_path, "rb") as f:
         files = {"video": f}
-        data = {"chat_id": CHAT_ID, "caption": title, "supports_streaming": True}
-        r = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo", data=data, files=files)
+        data = {
+            "chat_id": CHAT_ID,
+            "caption": title,
+            "supports_streaming": True
+        }
+        r = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo",
+            data=data,
+            files=files
+        )
 
     return {"status": "✅ Done", "telegram_response": r.json()}
